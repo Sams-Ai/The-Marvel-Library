@@ -1,0 +1,74 @@
+# Copy to render.yaml only after reviewing costs/settings and linking the private repository.
+# Blueprint sync can provision billable resources. This example intentionally does not
+# auto-enable Meta publishing. No credentials are included.
+services:
+  - type: web
+    name: marvel-library-web
+    runtime: python
+    region: singapore
+    plan: 0.5c-512mb
+    buildCommand: pip install -r requirements-production.txt
+    startCommand: gunicorn webapp:app_wsgi --bind 0.0.0.0:$PORT --workers 2 --timeout 60
+    healthCheckPath: /healthz
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: marvel-library-db
+          property: connectionString
+      - key: PGSSLMODE
+        value: require
+      - key: WEB_USER
+        value: operator
+      - key: WEB_PASSWORD_HASH
+        sync: false
+      - key: WEB_SESSION_KEY
+        generateValue: true
+      - key: COOKIE_SECURE
+        value: "1"
+      - key: OBJECT_STORAGE_BUCKET
+        sync: false
+      - key: OBJECT_STORAGE_REGION
+        value: ap-southeast-1
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: META_LIVE_PUBLISH_ENABLED
+        value: "false"
+      - key: WORKER_MODE
+        value: simulation
+  - type: worker
+    name: marvel-library-worker
+    runtime: python
+    region: singapore
+    plan: 0.5c-512mb
+    buildCommand: pip install -r requirements-production.txt
+    startCommand: python worker.py
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: marvel-library-db
+          property: connectionString
+      - key: PGSSLMODE
+        value: require
+      - key: OBJECT_STORAGE_BUCKET
+        sync: false
+      - key: OBJECT_STORAGE_REGION
+        value: ap-southeast-1
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: META_LIVE_PUBLISH_ENABLED
+        value: "false"
+      - key: WORKER_MODE
+        value: simulation
+
+databases:
+  - name: marvel-library-db
+    region: singapore
+    plan: 0.1c-256mb
+    databaseName: marvel_library
+    user: marvel_library
+    postgresMajorVersion: "16"
+    diskSizeGB: 5
