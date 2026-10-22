@@ -1,10 +1,15 @@
-name: PostgreSQL integration
+name: Full test suite with PostgreSQL
 on:
   push:
     paths:
       - 'database.py'
       - 'migrations_pg.py'
       - 'test_database.py'
+      - 'test_webapp.py'
+      - 'test_ops.py'
+      - 'test_app.py'
+      - 'test_media_store.py'
+      - 'test_db_tools.py'
       - 'requirements-production.txt'
       - '.github/workflows/postgres.yml'
   pull_request:
@@ -12,11 +17,16 @@ on:
       - 'database.py'
       - 'migrations_pg.py'
       - 'test_database.py'
+      - 'test_webapp.py'
+      - 'test_ops.py'
+      - 'test_app.py'
+      - 'test_media_store.py'
+      - 'test_db_tools.py'
       - 'requirements-production.txt'
       - '.github/workflows/postgres.yml'
   workflow_dispatch: {}
 jobs:
-  postgres-integration:
+  full-test-suite:
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -41,4 +51,4 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install -r requirements-production.txt
-      - run: python -m unittest -v test_database
+      - run: python -m unittest discover -v
