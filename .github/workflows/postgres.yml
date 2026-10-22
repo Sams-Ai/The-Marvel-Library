@@ -1,0 +1,44 @@
+name: PostgreSQL integration
+on:
+  push:
+    paths:
+      - 'database.py'
+      - 'migrations_pg.py'
+      - 'test_database.py'
+      - 'requirements-production.txt'
+      - '.github/workflows/postgres.yml'
+  pull_request:
+    paths:
+      - 'database.py'
+      - 'migrations_pg.py'
+      - 'test_database.py'
+      - 'requirements-production.txt'
+      - '.github/workflows/postgres.yml'
+  workflow_dispatch: {}
+jobs:
+  postgres-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: tml_test
+          POSTGRES_DB: tml_integration
+          # Trust auth is limited to the ephemeral, network-isolated CI service.
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tml_test -d tml_integration"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      TEST_POSTGRES_URL: postgresql://tml_test@localhost:5432/tml_integration
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements-production.txt
+      - run: python -m unittest -v test_database
