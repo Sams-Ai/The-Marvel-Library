@@ -1,0 +1,5 @@
+# Production-only dependencies (install in a dedicated Python virtual environment).
+psycopg[binary]>=3.2,<4
+gunicorn>=23,<24
+boto3>=1.35,<2
+Pillow>=11,<12
