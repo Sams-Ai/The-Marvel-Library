@@ -1,0 +1,17 @@
+# DEPLOYMENT PLAN TEMPLATE ONLY — not provider-deployable configuration.
+# Intentionally contains no account IDs, credentials, service names or region.
+# Fill only after provider selection and a separate security review.
+provider: UNSELECTED
+region: UNSELECTED
+application:
+  runtime: python-3.12
+  worker: NOT_IMPLEMENTED
+  web_review_interface: NOT_IMPLEMENTED
+persistence:
+  database: sqlite-local-prototype
+  external_database: UNSELECTED
+  media_storage: UNSELECTED
+scheduler: NOT_IMPLEMENTED
+secrets_manager: UNSELECTED
+monitoring_and_alerts: UNSELECTED
+live_instagram_enabled: false
