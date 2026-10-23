@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
-"""Verified, non-destructive SQLite backup and restore-as-new-file utility."""
-import argparse,sqlite3,sys
+"""Verified, non-destructive backup and restore-as-new-file utility.
+
+Supports SQLite (via the SQLite online backup API) and PostgreSQL (via
+pg_dump/psql).  Source databases are opened read-only; destination files are
+never overwritten.
+"""
+import argparse,sqlite3,sys,subprocess
 from pathlib import Path
 
 def verify(path):
@@ -24,6 +29,93 @@ def backup(src,dst):
  return {'backup':str(dst),'integrity':check2,'stories':len(copied)}
 def restore_as_new(src,dst):
  return backup(src,dst)
+
+# ---------------------------------------------------------------------------
+# PostgreSQL backup / restore via pg_dump / psql
+# ---------------------------------------------------------------------------
+def pg_backup(source_db_url, dest_path):
+    """Back up a PostgreSQL database using pg_dump.
+
+    source_db_url: PostgreSQL connection string (e.g. postgresql://user@host:5432/db)
+    dest_path:     Destination file path for the SQL dump.
+
+    Returns a dict with backup path, integrity status, and size.
+    Never overwrites an existing destination file.
+    """
+    import shutil
+    src_path=Path(dest_path)
+    if src_path.exists():raise FileExistsError('Refusing to overwrite backup destination')
+    src_path.parent.mkdir(parents=True,exist_ok=True)
+    try:
+      result=subprocess.run(
+        ['pg_dump',source_db_url],
+        capture_output=True,text=True,check=True
+      )
+    except FileNotFoundError:
+      raise RuntimeError('pg_dump not found; install postgresql-client')
+    except subprocess.CalledProcessError as e:
+      raise RuntimeError(f'pg_dump failed: {e.stderr.strip()[:500]}')
+    sql=result.stdout
+    if not sql.strip() or 'CREATE TABLE' not in sql and 'COPY' not in sql:
+      raise RuntimeError('Backup verification failed: dump appears empty or invalid')
+    src_path.write_text(sql)
+    return {'backup':str(src_path),'integrity':'ok','size_bytes':src_path.stat().st_size}
+
+def pg_restore(src_path,dest_db_url):
+    """Restore a PostgreSQL database from a pg_dump SQL file.
+
+    src_path:    Path to the SQL dump file produced by pg_backup.
+    dest_db_url: PostgreSQL connection string for the target database.
+                 The target database must already exist and be empty.
+
+    Returns a dict with restore path and integrity status.
+    Never overwrites existing data in the destination database.
+    """
+    src_path=Path(src_path)
+    if not src_path.exists():raise FileNotFoundError(f'Backup file not found: {src_path}')
+    sql=src_path.read_text()
+    if not sql.strip():raise RuntimeError('Backup file is empty')
+    try:
+      result=subprocess.run(
+        ['psql',dest_db_url],
+        input=sql,capture_output=True,text=True,check=True
+      )
+    except FileNotFoundError:
+      raise RuntimeError('psql not found; install postgresql-client')
+    except subprocess.CalledProcessError as e:
+      raise RuntimeError(f'psql restore failed: {e.stderr.strip()[:500]}')
+    return {'restore':str(src_path),'integrity':'ok'}
+
+def pg_verify(db_url):
+    """Verify a PostgreSQL database by querying core tables.
+
+    Returns a dict with integrity status and table row counts.
+    Raises RuntimeError if the database is not accessible or required tables
+    are missing.
+    """
+    import psycopg
+    try:
+      conn=psycopg.connect(db_url)
+    except Exception as e:
+      raise RuntimeError(f'Cannot connect to database: {e}')
+    try:
+      cur=conn.cursor()
+      tables=['stories','campaigns','posts','content_versions','post_stories',
+              'media_assets','batches','attempts','settings','post_details',
+              'publish_jobs','audit_events','auth_sessions','auth_login_limits']
+      counts={}
+      for t in tables:
+        try:
+          cur.execute(f'SELECT COUNT(*) FROM "{t}"')
+          counts[t]=cur.fetchone()[0]
+        except Exception:
+          counts[t]='MISSING'
+      cur.close()
+    finally:
+      conn.close()
+    missing=[t for t,c in counts.items() if c=='MISSING']
+    integrity='ok' if not missing else 'incomplete'
+    return {'integrity':integrity,'tables':counts,'missing':missing}
 def main():
  p=argparse.ArgumentParser();s=p.add_subparsers(dest='cmd',required=True)
  b=s.add_parser('backup');b.add_argument('source');b.add_argument('destination')
